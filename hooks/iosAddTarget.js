@@ -248,7 +248,7 @@ module.exports = function (context) {
 
     if (!target) {
       // Add PBXNativeTarget to the project
-      target = pbxProject.addTarget('ShareExt', 'app_extension', 'ShareExtension');
+      target = pbxProject.addTarget('ShareExt', 'app_extension', 'ShareExtension', getBundleId(configXml) + BUNDLE_SUFFIX);
       
       // Add a new PBXSourcesBuildPhase for our ShareViewController
       // (we can't add it to the existing one because an extension is kind of an extra app)
