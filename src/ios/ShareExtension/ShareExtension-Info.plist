@@ -26,16 +26,31 @@
 		<string>ShareViewController</string>
 		<key>NSExtensionAttributes</key>
 		<dict>
+		<!-- 
 			<key>NSExtensionActivationRule</key>
-			<!-- string>TRUEPREDICATE</string -->
+			
       <dict>
         <key>NSExtensionActivationSupportsImageWithMaxCount</key>
         <integer>1</integer>
+		string>TRUEPREDICATE</string -->
         <!-- key>NSExtensionActivationSupportsMovieWithMaxCount</key>
         <integer>1</integer -->
         <!-- key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
-        <integer>1</integer -->
-      </dict>
+        <integer>1</integer 
+		</dict>
+		-->
+		<key>NSExtensionActivationRule</key>	
+				<string>
+					SUBQUERY (
+					extensionItems, $extensionItem,
+						SUBQUERY (
+						$extensionItem.attachments, $attachment,
+						ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.image" ||
+						ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.vcard"
+						).@count >= 1
+					).@count > 0
+				</string>
+      
       <key>NSExtensionActivationUsesStrictMatching</key>
       <integer>1</integer>
       <key>NSExtensionActivationDictionaryVersion</key>

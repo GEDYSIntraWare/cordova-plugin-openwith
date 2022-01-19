@@ -228,6 +228,10 @@ static NSDictionary* launchOptions = nil;
     }
     NSDictionary *dict = (NSDictionary*)object;
     NSData *data = dict[@"data"];
+     NSLog(@"Data des objectesss");
+    NSString* myString;
+    myString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    NSLog(@"%@", myString);
     NSString *name = dict[@"name"];
     self.backURL = dict[@"backURL"];
     NSString *type = [self mimeTypeFromUti:dict[@"uti"]];
@@ -249,17 +253,34 @@ static NSDictionary* launchOptions = nil;
 
     NSString *uri = [NSString stringWithFormat: @"shareextension://index=0,name=%@,type=%@",
         name, type];
-    CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{
-        @"action": @"SEND",
-        @"exit": @YES,
-        @"items": @[@{
-            @"base64": [data convertToBase64],
-            @"type": type,
-            @"utis": utis,
-            @"uri": uri,
-            @"name": name
-        }]
-    }];
+    CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{}];
+    if ([type isEqual:@"text/vcard"] )
+    {
+        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{
+            @"action": @"SEND",
+            @"exit": @YES,
+            @"items": @[@{
+                @"base64": [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding],
+                @"type": type,
+                @"utis": utis,
+                @"uri": uri,
+                @"name": name
+            }]
+        }];
+        
+    } else {
+        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{
+            @"action": @"SEND",
+            @"exit": @YES,
+            @"items": @[@{
+                @"base64": [data convertToBase64],
+                @"type": type,
+                @"utis": utis,
+                @"uri": uri,
+                @"name": name
+            }]
+        }];
+    }
     pluginResult.keepCallback = [NSNumber numberWithBool:YES];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:self.handlerCallback];
 }

@@ -178,6 +178,57 @@
             }];
 
             return;
+        } else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.vcard"]) {
+                
+                [itemProvider loadItemForTypeIdentifier:@"public.vcard" options:nil completionHandler:^(NSData *vCardData, NSError *error) {
+                    
+                    NSData *data = [[NSData alloc] init];
+                    data = vCardData;
+
+                    NSString *suggestedName = @"";
+                if ([itemProvider respondsToSelector:NSSelectorFromString(@"getSuggestedName")]) {
+                    suggestedName = [itemProvider valueForKey:@"suggestedName"];
+                }
+
+                NSString *uti = @"";
+                NSArray<NSString *> *utis = [NSArray new];
+                if ([itemProvider.registeredTypeIdentifiers count] > 0) {
+                    uti = itemProvider.registeredTypeIdentifiers[0];
+                    utis = itemProvider.registeredTypeIdentifiers;
+                }
+                else {
+                    uti = @"public.vcard";
+                }
+                NSDictionary *dict = @{
+                    @"backURL": self.backURL,
+                    @"data" : data,
+                    @"uti": uti,
+                    @"utis": utis,
+                    @"name": suggestedName
+                };
+                [self.userDefaults setObject:dict forKey:@"image"];
+                [self.userDefaults synchronize];
+
+                // Emit a URL that opens the cordova app
+                NSString *url = [NSString stringWithFormat:@"%@://image", SHAREEXT_URL_SCHEME];
+
+                // Not allowed:
+                // [[UIApplication sharedApplication] openURL:[NSURL URLWithString:url]];
+                
+                // Crashes:
+                // [self.extensionContext openURL:[NSURL URLWithString:url] completionHandler:nil];
+                
+                // From https://stackoverflow.com/a/25750229/2343390
+                // Reported not to work since iOS 8.3
+                // NSURLRequest *request = [[NSURLRequest alloc] initWithURL:[NSURL URLWithString:url]];
+                // [self.webView loadRequest:request];
+                
+                [self openURL:[NSURL URLWithString:url]];
+
+                // Inform the host that we're done, so it un-blocks its UI.
+                [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+            }];
+            return;
         }
     }
 
