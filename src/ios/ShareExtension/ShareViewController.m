@@ -179,7 +179,7 @@
 
             return;
         } else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.vcard"]) {
-                
+            
                 [itemProvider loadItemForTypeIdentifier:@"public.vcard" options:nil completionHandler:^(NSData *vCardData, NSError *error) {
                     
                     NSData *data = [[NSData alloc] init];
@@ -211,7 +211,7 @@
 
                 // Emit a URL that opens the cordova app
                 NSString *url = [NSString stringWithFormat:@"%@://image", SHAREEXT_URL_SCHEME];
-
+                    
                 // Not allowed:
                 // [[UIApplication sharedApplication] openURL:[NSURL URLWithString:url]];
                 
@@ -225,15 +225,22 @@
                 
                 [self openURL:[NSURL URLWithString:url]];
 
-                // Inform the host that we're done, so it un-blocks its UI.
-                [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
-            }];
+                    // Inform the host that we're done, so it un-blocks its UI.
+                    [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];  
+                }];
+        // Needed to unblock the UI when sharing a VCard from the contacts app. Ends the extension with the return.
+        double delayInSeconds = 0.01;
+            NSLog(@"Exiting Extension in: ");
+            dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delayInSeconds * NSEC_PER_SEC)); // 1
+            dispatch_after(popTime, dispatch_get_main_queue(), ^(void){ // 2""
+            NSLog(@"Exiting...");
+                @throw NSInternalInconsistencyException;
+            });
             return;
         }
     }
 
-    // Inform the host that we're done, so it un-blocks its UI.
-    [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+    
 }
 
 - (NSArray*) configurationItems {
@@ -250,7 +257,10 @@
     // Camera - com.apple.camera
     // Clock - com.apple.mobiletimer
     // Compass - com.apple.compass
-    // Contacts - com.apple.MobileAddressBook
+    // Contacts - com.apple.MobileAddressBook people:// contact://
+    if ([bundleId isEqualToString:@"com.apple.MobileAddressBook"]) {
+        return @"contact://";
+    }
     // FaceTime - com.apple.facetime
     // Find Friends - com.apple.mobileme.fmf1
     // Find iPhone - com.apple.mobileme.fmip1
@@ -294,5 +304,4 @@
     NSString *hostBundleID = [parent valueForKey:(@"_hostBundleID")];
     self.backURL = [self backURLFromBundleID:hostBundleID];
 }
-
 @end

@@ -228,10 +228,6 @@ static NSDictionary* launchOptions = nil;
     }
     NSDictionary *dict = (NSDictionary*)object;
     NSData *data = dict[@"data"];
-     NSLog(@"Data des objectesss");
-    NSString* myString;
-    myString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    NSLog(@"%@", myString);
     NSString *name = dict[@"name"];
     self.backURL = dict[@"backURL"];
     NSString *type = [self mimeTypeFromUti:dict[@"uti"]];
@@ -254,6 +250,8 @@ static NSDictionary* launchOptions = nil;
     NSString *uri = [NSString stringWithFormat: @"shareextension://index=0,name=%@,type=%@",
         name, type];
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{}];
+    
+    // Other possibility of sharing vcards without base64 coding. Needed to share cards with special letters like öäü
     if ([type isEqual:@"text/vcard"] )
     {
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{
@@ -269,6 +267,7 @@ static NSDictionary* launchOptions = nil;
         }];
         
     } else {
+        
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{
             @"action": @"SEND",
             @"exit": @YES,
