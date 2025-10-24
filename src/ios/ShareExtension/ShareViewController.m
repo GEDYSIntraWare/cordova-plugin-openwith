@@ -234,7 +234,12 @@
             dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delayInSeconds * NSEC_PER_SEC)); // 1
             dispatch_after(popTime, dispatch_get_main_queue(), ^(void){ // 2""
             NSLog(@"Exiting...");
-                @throw NSInternalInconsistencyException;
+                if (@available(iOS 26, *)) {
+                    //don't throw error regarding iOS26 changes, it is not needed anymore
+                    //@throw NSInternalInconsistencyException;
+                } else {
+                    @throw NSInternalInconsistencyException;
+                }
             });
             return;
         }
