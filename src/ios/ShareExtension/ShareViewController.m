@@ -29,6 +29,8 @@
 
 #import <UIKit/UIKit.h>
 #import <Social/Social.h>
+#import <Photos/Photos.h>
+#import <MobileCoreServices/MobileCoreServices.h>
 #import "ShareViewController.h"
 
 @interface ShareViewController : UIViewController {
@@ -42,9 +44,8 @@
 @end
 
 /*
- * Constants
- */
-
+* Constants
+*/
 #define VERBOSITY_DEBUG  0
 #define VERBOSITY_INFO  10
 #define VERBOSITY_WARN  20
@@ -61,6 +62,7 @@
         NSLog(@"[ShareViewController.m]%@", message);
     }
 }
+
 - (void) debug:(NSString*)message { [self log:VERBOSITY_DEBUG message:message]; }
 - (void) info:(NSString*)message { [self log:VERBOSITY_INFO message:message]; }
 - (void) warn:(NSString*)message { [self log:VERBOSITY_WARN message:message]; }
@@ -84,23 +86,19 @@
 }
 
 - (void) openURL:(nonnull NSURL *)url {
-
     SEL selector = NSSelectorFromString(@"openURL:options:completionHandler:");
-
     UIResponder* responder = self;
     while ((responder = [responder nextResponder]) != nil) {
         NSLog(@"responder = %@", responder);
         if([responder respondsToSelector:selector] == true) {
             NSMethodSignature *methodSignature = [responder methodSignatureForSelector:selector];
             NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSignature];
-
             // Arguments
             UISceneOpenExternalURLOptions * options = [[UISceneOpenExternalURLOptions alloc] init];
             options.universalLinksOnly = false;
             void (^completion)(BOOL success) = ^void(BOOL success) {
                 NSLog(@"Completions block: %i", success);
             };
-
             [invocation setTarget: responder];
             [invocation setSelector: selector];
             [invocation setArgument: &url atIndex: 2];
@@ -113,202 +111,401 @@
 }
 
 - (void) submit {
-
     [self setup];
     [self debug:@"[submit]"];
-
-    // This is called after the user selects Post. Do the upload of contentText and/or NSExtensionContext attachments.
-    for (NSItemProvider* itemProvider in ((NSExtensionItem*)self.extensionContext.inputItems[0]).attachments) {
+    
+    NSExtensionItem *extensionItem = (NSExtensionItem*)self.extensionContext.inputItems[0];
+    
+    for (NSItemProvider* itemProvider in extensionItem.attachments) {
+        [self debug:[NSString stringWithFormat:@"Item provider registered types: %@", itemProvider.registeredTypeIdentifiers]];
         
-        if ([itemProvider hasItemConformingToTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER]) {
-            [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
-            
-            [itemProvider loadItemForTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER options:nil completionHandler: ^(id<NSSecureCoding> item, NSError *error) {
-                
-                NSData *data = [[NSData alloc] init];
-                if([(NSObject*)item isKindOfClass:[NSURL class]]) {
-                    data = [NSData dataWithContentsOfURL:(NSURL*)item];
-                }
-                if([(NSObject*)item isKindOfClass:[UIImage class]]) {
-                    data = UIImagePNGRepresentation((UIImage*)item);
-                }
-
-                NSString *suggestedName = @"";
-                if ([itemProvider respondsToSelector:NSSelectorFromString(@"getSuggestedName")]) {
-                    suggestedName = [itemProvider valueForKey:@"suggestedName"];
-                }
-
-                NSString *uti = @"";
-                NSArray<NSString *> *utis = [NSArray new];
-                if ([itemProvider.registeredTypeIdentifiers count] > 0) {
-                    uti = itemProvider.registeredTypeIdentifiers[0];
-                    utis = itemProvider.registeredTypeIdentifiers;
-                }
-                else {
-                    uti = SHAREEXT_UNIFORM_TYPE_IDENTIFIER;
-                }
-                NSDictionary *dict = @{
-                    @"backURL": self.backURL,
-                    @"data" : data,
-                    @"uti": uti,
-                    @"utis": utis,
-                    @"name": suggestedName
-                };
-                [self.userDefaults setObject:dict forKey:@"image"];
-                [self.userDefaults synchronize];
-
-                // Emit a URL that opens the cordova app
-                NSString *url = [NSString stringWithFormat:@"%@://image", SHAREEXT_URL_SCHEME];
-
-                // Not allowed:
-                // [[UIApplication sharedApplication] openURL:[NSURL URLWithString:url]];
-                
-                // Crashes:
-                // [self.extensionContext openURL:[NSURL URLWithString:url] completionHandler:nil];
-                
-                // From https://stackoverflow.com/a/25750229/2343390
-                // Reported not to work since iOS 8.3
-                // NSURLRequest *request = [[NSURLRequest alloc] initWithURL:[NSURL URLWithString:url]];
-                // [self.webView loadRequest:request];
-                
-                [self openURL:[NSURL URLWithString:url]];
-
-                // Inform the host that we're done, so it un-blocks its UI.
-                [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
-            }];
-
+        if ([itemProvider hasItemConformingToTypeIdentifier:@"com.apple.live-photo"]) {
+            [self debug:@"Live Photo detected"];
+            [self handleLivePhoto:itemProvider];
             return;
-        } else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.vcard"]) {
-            
-                [itemProvider loadItemForTypeIdentifier:@"public.vcard" options:nil completionHandler:^(NSData *vCardData, NSError *error) {
-                    
-                    NSData *data = [[NSData alloc] init];
-                    data = vCardData;
-
-                    NSString *suggestedName = @"";
-                if ([itemProvider respondsToSelector:NSSelectorFromString(@"getSuggestedName")]) {
-                    suggestedName = [itemProvider valueForKey:@"suggestedName"];
-                }
-
-                NSString *uti = @"";
-                NSArray<NSString *> *utis = [NSArray new];
-                if ([itemProvider.registeredTypeIdentifiers count] > 0) {
-                    uti = itemProvider.registeredTypeIdentifiers[0];
-                    utis = itemProvider.registeredTypeIdentifiers;
-                }
-                else {
-                    uti = @"public.vcard";
-                }
-                NSDictionary *dict = @{
-                    @"backURL": self.backURL,
-                    @"data" : data,
-                    @"uti": uti,
-                    @"utis": utis,
-                    @"name": suggestedName
-                };
-                [self.userDefaults setObject:dict forKey:@"image"];
-                [self.userDefaults synchronize];
-
-                // Emit a URL that opens the cordova app
-                NSString *url = [NSString stringWithFormat:@"%@://image", SHAREEXT_URL_SCHEME];
-                    
-                // Not allowed:
-                // [[UIApplication sharedApplication] openURL:[NSURL URLWithString:url]];
-                
-                // Crashes:
-                // [self.extensionContext openURL:[NSURL URLWithString:url] completionHandler:nil];
-                
-                // From https://stackoverflow.com/a/25750229/2343390
-                // Reported not to work since iOS 8.3
-                // NSURLRequest *request = [[NSURLRequest alloc] initWithURL:[NSURL URLWithString:url]];
-                // [self.webView loadRequest:request];
-                
-                [self openURL:[NSURL URLWithString:url]];
-
-                    // Inform the host that we're done, so it un-blocks its UI.
-                    [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];  
-                }];
-        // Needed to unblock the UI when sharing a VCard from the contacts app. Ends the extension with the return.
-        double delayInSeconds = 0.01;
-            NSLog(@"Exiting Extension in: ");
-            dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delayInSeconds * NSEC_PER_SEC)); // 1
-            dispatch_after(popTime, dispatch_get_main_queue(), ^(void){ // 2""
-            NSLog(@"Exiting...");
-                if (@available(iOS 26, *)) {
-                    //don't throw error regarding iOS26 changes, it is not needed anymore
-                    //@throw NSInternalInconsistencyException;
-                } else {
-                    @throw NSInternalInconsistencyException;
-                }
-            });
+        }
+        else if ([itemProvider hasItemConformingToTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER]) {
+            [self debug:@"Regular image detected"];
+            [self handleRegularImage:itemProvider];
+            return;
+        }
+        else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.vcard"]) {
+            [self debug:@"VCard detected"];
+            [self handleVCard:itemProvider];
             return;
         }
     }
-
     
+    [self debug:@"No supported item type found"];
+    [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+}
+
+- (void) handleRegularImage:(NSItemProvider*)itemProvider {
+    [self debug:@"[handleRegularImage]"];
+    
+    [itemProvider loadItemForTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER
+                                   options:nil
+                           completionHandler:^(id<NSSecureCoding> item, NSError *error) {
+        if (error) {
+            [self error:[NSString stringWithFormat:@"Error: %@", error.localizedDescription]];
+            [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+            return;
+        }
+        
+        if (item == nil) {
+            [self error:@"Item is nil"];
+            [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+            return;
+        }
+        
+        NSData *data = [[NSData alloc] init];
+        NSObject *obj = (NSObject *)item;
+        
+        if ([obj isKindOfClass:[NSURL class]]) {
+            NSURL *url = (NSURL *)item;
+            data = [NSData dataWithContentsOfURL:url];
+            [self debug:[NSString stringWithFormat:@"Loaded data from URL: %lu bytes", (unsigned long)data.length]];
+        }
+        else if ([obj isKindOfClass:[UIImage class]]) {
+            UIImage *image = (UIImage *)item;
+            data = UIImagePNGRepresentation(image);
+            [self debug:[NSString stringWithFormat:@"Loaded PNG data: %lu bytes", (unsigned long)data.length]];
+        }
+        else {
+            [self error:[NSString stringWithFormat:@"Unknown item type: %@", [obj class]]];
+            [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+            return;
+        }
+        
+        if (data == nil || data.length == 0) {
+            [self error:@"Data is empty"];
+            [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+            return;
+        }
+        
+        NSString *suggestedName = @"image";
+        if ([itemProvider respondsToSelector:NSSelectorFromString(@"suggestedName")]) {
+            NSString *name = [itemProvider valueForKey:@"suggestedName"];
+            if (name && [name length] > 0) {
+                suggestedName = name;
+            }
+        }
+        
+        NSString *uti = SHAREEXT_UNIFORM_TYPE_IDENTIFIER;
+        NSArray<NSString *> *utis = itemProvider.registeredTypeIdentifiers;
+        
+        if (utis && [utis count] > 0) {
+            uti = utis[0];
+        }
+        
+        [self saveSharedDataWithBytes:data
+                                name:suggestedName
+                                 uti:uti
+                                utis:utis];
+    }];
+}
+
+- (void) handleLivePhoto:(NSItemProvider*)itemProvider {
+    [self debug:@"[handleLivePhoto]"];
+    
+  // Live Photos cannot be loaded directly as JPEG/HEIC
+  // We need to load PHLivePhoto and then extract the data
+    
+    if (@available(iOS 9.1, *)) {
+        [itemProvider loadItemForTypeIdentifier:@"com.apple.live-photo"
+                                       options:nil
+                               completionHandler:^(id<NSSecureCoding> item, NSError *error) {
+            
+            if (error) {
+                [self error:[NSString stringWithFormat:@"Error loading live photo: %@", error.localizedDescription]];
+                
+                // Fallback: Try to load the still image
+                [self debug:@"Trying fallback to load still image"];
+                [self loadLivePhotoStillImage:itemProvider];
+                return;
+            }
+            
+            if (item == nil) {
+                [self error:@"Live photo item is nil"];
+                [self loadLivePhotoStillImage:itemProvider];
+                return;
+            }
+            
+            [self debug:[NSString stringWithFormat:@"Successfully loaded live photo item"]];
+            
+            // Try to extract image data from the item
+            [self extractLivePhotoData:item];
+        }];
+    } else {
+        [self loadLivePhotoStillImage:itemProvider];
+    }
+}
+
+- (void) loadLivePhotoStillImage:(NSItemProvider*)itemProvider {
+    [self debug:@"[loadLivePhotoStillImage]"];
+    
+    // Fallback: Load the thumbnail of the live photo
+    // Live Photos have multiple attachments - we look for the UIImage
+    // Try to load UIImage directly
+    if ([itemProvider canLoadObjectOfClass:[UIImage class]]) {
+        [self debug:@"Loading UIImage from live photo"];
+        [itemProvider loadObjectOfClass:[UIImage class]
+                       completionHandler:^(__kindof id<NSItemProviderReading> object, NSError *error) {
+            if (error) {
+                [self error:[NSString stringWithFormat:@"Error loading UIImage: %@", error.localizedDescription]];
+                
+                // Second fallback: Try NSURL
+                [self loadLivePhotoFromURL:itemProvider];
+                return;
+            }
+            
+            if ([object isKindOfClass:[UIImage class]]) {
+                UIImage *image = (UIImage *)object;
+                [self debug:[NSString stringWithFormat:@"Got UIImage, size: %@", NSStringFromCGSize(image.size)]];
+                [self processLivePhotoImage:image withName:@"livephoto.jpg"];
+            }
+        }];
+    } else {
+        [self loadLivePhotoFromURL:itemProvider];
+    }
+}
+
+- (void) loadLivePhotoFromURL:(NSItemProvider*)itemProvider {
+    [self debug:@"[loadLivePhotoFromURL]"];
+    
+    if ([itemProvider canLoadObjectOfClass:[NSURL class]]) {
+        [self debug:@"Loading NSURL from live photo"];
+        [itemProvider loadObjectOfClass:[NSURL class]
+                           completionHandler:^(__kindof id<NSItemProviderReading> object, NSError *error) {
+            if (error) {
+                [self error:[NSString stringWithFormat:@"Error loading NSURL: %@", error.localizedDescription]];
+                [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+                return;
+            }
+            
+            if ([object isKindOfClass:[NSURL class]]) {
+                NSURL *url = (NSURL *)object;
+                NSData *data = [NSData dataWithContentsOfURL:url];
+                [self debug:[NSString stringWithFormat:@"Got data from URL: %lu bytes", (unsigned long)data.length]];
+                [self processLivePhotoDataWithBytes:data andName:@"livephoto.jpg"];
+            }
+        }];
+    } else {
+        [self error:@"Cannot load live photo - no suitable type available"];
+        [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+    }
+}
+
+- (void) extractLivePhotoData:(id<NSSecureCoding>)livePhotoItem {
+    [self debug:@"[extractLivePhotoData]"];
+    
+    // Cast to NSObject to access methods
+    NSObject *obj = (NSObject *)livePhotoItem;
+    
+    // Try to extract the image from the live photo
+    if ([obj respondsToSelector:@selector(image)]) {
+        NSData *imageData = [obj performSelector:@selector(image)];
+        if ([imageData isKindOfClass:[UIImage class]]) {
+            UIImage *image = (UIImage *)imageData;
+            [self processLivePhotoImage:image withName:@"livephoto.jpg"];
+            return;
+        }
+    }
+    
+    // If that doesn't work, fallback
+    [self debug:@"Could not extract image from live photo, using fallback"];
+    [self loadLivePhotoStillImage:nil];
+}
+
+- (void) processLivePhotoImage:(UIImage *)image withName:(NSString *)name {
+    [self debug:@"[processLivePhotoImage]"];
+    
+    if (image == nil) {
+        [self error:@"Image is nil"];
+        [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+        return;
+    }
+    
+    NSData *data = UIImageJPEGRepresentation(image, 0.9);
+    
+    if (data == nil || data.length == 0) {
+        [self error:@"Failed to convert live photo to JPEG"];
+        [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+        return;
+    }
+    
+    [self debug:[NSString stringWithFormat:@"Converted live photo to JPEG: %lu bytes", (unsigned long)data.length]];
+    
+    NSString *suggestedName = name ? name : @"livephoto.jpg";
+    NSString *uti = (NSString *)kUTTypeJPEG;
+    NSArray *utis = @[uti];
+    
+    [self saveSharedDataWithBytes:data
+                            name:suggestedName
+                             uti:uti
+                            utis:utis];
+}
+
+- (void) processLivePhotoDataWithBytes:(NSData *)data andName:(NSString *)name {
+    [self debug:@"[processLivePhotoDataWithBytes]"];
+    
+    if (data == nil || data.length == 0) {
+        [self error:@"Live photo data is empty"];
+        [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+        return;
+    }
+    
+    NSString *suggestedName = name ? name : @"livephoto.jpg";
+    NSString *uti = (NSString *)kUTTypeJPEG;
+    NSArray *utis = @[uti];
+    
+    [self saveSharedDataWithBytes:data
+                            name:suggestedName
+                             uti:uti
+                            utis:utis];
+}
+
+- (void) handleVCard:(NSItemProvider*)itemProvider {
+    [self debug:@"[handleVCard]"];
+    
+    [itemProvider loadItemForTypeIdentifier:@"public.vcard"
+                                   options:nil
+                           completionHandler:^(id<NSSecureCoding> item, NSError *error) {
+        if (error) {
+            [self error:[NSString stringWithFormat:@"Error: %@", error.localizedDescription]];
+            [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+            return;
+        }
+        
+        if (item == nil) {
+            [self error:@"VCard item is nil"];
+            [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+            return;
+        }
+        
+        NSData *data = [[NSData alloc] init];
+        NSObject *obj = (NSObject *)item;
+        
+        if ([obj isKindOfClass:[NSData class]]) {
+            data = (NSData *)item;
+        }
+        else if ([obj isKindOfClass:[NSURL class]]) {
+            NSURL *url = (NSURL *)item;
+            data = [NSData dataWithContentsOfURL:url];
+        }
+        
+        if (data == nil || data.length == 0) {
+            [self error:@"VCard data is empty"];
+            [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+            return;
+        }
+        
+        NSString *suggestedName = @"contact";
+        if ([itemProvider respondsToSelector:NSSelectorFromString(@"suggestedName")]) {
+            NSString *name = [itemProvider valueForKey:@"suggestedName"];
+            if (name && [name length] > 0) {
+                suggestedName = name;
+            }
+        }
+        
+        NSString *uti = @"public.vcard";
+        NSArray<NSString *> *utis = itemProvider.registeredTypeIdentifiers;
+        
+        if (utis && [utis count] > 0) {
+            uti = utis[0];
+        }
+        
+        [self saveSharedDataWithBytes:data
+                            name:suggestedName
+                             uti:uti
+                            utis:utis];
+    }];
+}
+
+// Method for storing large amounts of data in a file.
+- (void) saveSharedDataWithBytes:(NSData *)data
+                            name:(NSString *)name
+                             uti:(NSString *)uti
+                            utis:(NSArray *)utis {
+    
+    [self debug:[NSString stringWithFormat:@"[saveSharedDataWithBytes] Size: %lu bytes", (unsigned long)data.length]];
+    
+    // create temporary path within container
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSURL *containerURL = [fileManager containerURLForSecurityApplicationGroupIdentifier:SHAREEXT_GROUP_IDENTIFIER];
+    
+    if (!containerURL) {
+        [self error:@"Cannot access container"];
+        [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+        return;
+    }
+    
+    // generate unique file name
+    NSString *fileName = [NSString stringWithFormat:@"shared_%@_%ld",
+                         [name stringByDeletingPathExtension],
+                         (long)[[NSDate date] timeIntervalSince1970]];
+    
+    NSURL *fileURL = [containerURL URLByAppendingPathComponent:fileName];
+    
+    // save file
+    NSError *writeError = nil;
+    [data writeToURL:fileURL options:NSDataWritingAtomic error:&writeError];
+    
+    if (writeError) {
+        [self error:[NSString stringWithFormat:@"Error writing file: %@", writeError.localizedDescription]];
+        [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+        return;
+    }
+    
+    [self debug:[NSString stringWithFormat:@"File saved to: %@", fileURL.path]];
+    
+    // store file name and url into user defaults meta data
+    NSString *backURL = self.backURL ? self.backURL : @"";
+    NSArray *utiArray = utis ? utis : @[uti];
+    
+    NSDictionary *dict = @{
+        @"backURL": backURL,
+        @"filePath": fileName,  // only file name, no data
+        @"uti": uti,
+        @"utis": utiArray,
+        @"name": name
+    };
+    
+    [self.userDefaults setObject:dict forKey:@"image"];
+    [self.userDefaults synchronize];
+    
+    [self debug:@"Saved metadata to user defaults"];
+    
+    NSString *urlString = [NSString stringWithFormat:@"%@://image", SHAREEXT_URL_SCHEME];
+    [self openURL:[NSURL URLWithString:urlString]];
+    [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
 }
 
 - (NSArray*) configurationItems {
-    // To add configuration options via table cells at the bottom of the sheet, return an array of SLComposeSheetConfigurationItem here.
     return @[];
 }
 
 - (NSString*) backURLFromBundleID: (NSString*)bundleId {
     if (bundleId == nil) return nil;
-    // App Store - com.apple.AppStore
+    
     if ([bundleId isEqualToString:@"com.apple.AppStore"]) return @"itms-apps://";
-    // Calculator - com.apple.calculator
-    // Calendar - com.apple.mobilecal
-    // Camera - com.apple.camera
-    // Clock - com.apple.mobiletimer
-    // Compass - com.apple.compass
-    // Contacts - com.apple.MobileAddressBook people:// contact://
-    if ([bundleId isEqualToString:@"com.apple.MobileAddressBook"]) {
-        return @"contact://";
-    }
-    // FaceTime - com.apple.facetime
-    // Find Friends - com.apple.mobileme.fmf1
-    // Find iPhone - com.apple.mobileme.fmip1
-    // Game Center - com.apple.gamecenter
-    // Health - com.apple.Health
-    // iBooks - com.apple.iBooks
-    // iTunes Store - com.apple.MobileStore
-    // Mail - com.apple.mobilemail - message://
+    if ([bundleId isEqualToString:@"com.apple.MobileAddressBook"]) return @"contact://";
     if ([bundleId isEqualToString:@"com.apple.mobilemail"]) return @"message://";
-    // Maps - com.apple.Maps - maps://
     if ([bundleId isEqualToString:@"com.apple.Maps"]) return @"maps://";
-    // Messages - com.apple.MobileSMS
-    // Music - com.apple.Music
-    // News - com.apple.news - applenews://
     if ([bundleId isEqualToString:@"com.apple.news"]) return @"applenews://";
-    // Notes - com.apple.mobilenotes - mobilenotes://
     if ([bundleId isEqualToString:@"com.apple.mobilenotes"]) return @"mobilenotes://";
-    // Phone - com.apple.mobilephone
-    // Photos - com.apple.mobileslideshow
     if ([bundleId isEqualToString:@"com.apple.mobileslideshow"]) return @"photos-redirect://";
-    // Podcasts - com.apple.podcasts
-    // Reminders - com.apple.reminders - x-apple-reminder://
     if ([bundleId isEqualToString:@"com.apple.reminders"]) return @"x-apple-reminder://";
-    // Safari - com.apple.mobilesafari
-    // Settings - com.apple.Preferences
-    // Stocks - com.apple.stocks
-    // Tips - com.apple.tips
-    // Videos - com.apple.videos - videos://
     if ([bundleId isEqualToString:@"com.apple.videos"]) return @"videos://";
-    // Voice Memos - com.apple.VoiceMemos - voicememos://
     if ([bundleId isEqualToString:@"com.apple.VoiceMemos"]) return @"voicememos://";
-    // Wallet - com.apple.Passbook
-    // Watch - com.apple.Bridge
-    // Weather - com.apple.weather
+    
     return @"";
 }
 
-// This is called at the point where the Post dialog is about to be shown.
-// We use it to store the _hostBundleID
 - (void) willMoveToParentViewController: (UIViewController*)parent {
     NSString *extensionBundleIdentifier = [[NSBundle mainBundle] bundleIdentifier];
     NSString *parentBundleIdentifier = [extensionBundleIdentifier stringByReplacingOccurrencesOfString:@".shareextension" withString:@""];
-
     self.backURL = [self backURLFromBundleID:parentBundleIdentifier];
 }
+
 @end
