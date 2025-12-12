@@ -125,10 +125,8 @@ console.log('Removing target "' + PLUGIN_ID + '/ShareExtension" to XCode project
 
 module.exports = function (context) {
 
-  var Q = require('q');
-  var deferral = new Q.defer();
-
-  findXCodeproject(context, function(projectFolder, projectName) {
+  return new Promise(function(resolve, reject) {
+    findXCodeproject(context, function(projectFolder, projectName) {
 
     console.log('  - Folder containing your iOS project: ' + iosFolder(context));
 
@@ -216,8 +214,7 @@ module.exports = function (context) {
     fs.writeFileSync(pbxProjectPath, pbxProject.writeSync());
     console.log('Removed ShareExtension from XCode project');
 
-    deferral.resolve();
+    resolve();
+    });
   });
-
-  return deferral.promise;
 };

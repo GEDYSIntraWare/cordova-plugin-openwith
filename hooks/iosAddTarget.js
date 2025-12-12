@@ -107,9 +107,11 @@ function getCordovaParameter(configXml, variableName) {
 
 // Get the bundle id from config.xml
 function getBundleId(configXml) {
-  var elementTree = require('elementtree');
-  var etree = elementTree.parse(configXml);
-  return etree.getroot().get('id');
+  var match = configXml.match(/<widget[^>]+id=["']([^"']+)["']/i);
+  if (!match || !match[1]) {
+    throw redError('Could not find widget id in config.xml');
+  }
+  return match[1];
 }
 
 function parsePbxProject(context, pbxProjectPath) {
@@ -212,9 +214,6 @@ console.log('Adding target "' + PLUGIN_ID + '/ShareExtension" to XCode project')
 
 module.exports = function (context) {
 
-  var Q = require('q');
-  var deferral = new Q.defer();
-
   // if (context.opts.cordova.platforms.indexOf('ios') < 0) {
   //   log('You have to add the ios platform before adding this plugin!', 'error');
   // }
@@ -224,7 +223,8 @@ module.exports = function (context) {
     configXml = configXml.substring(configXml.indexOf('<'));
   }
 
-  findXCodeproject(context, function(projectFolder, projectName) {
+  return new Promise(function(resolve, reject) {
+    findXCodeproject(context, function(projectFolder, projectName) {
 
     console.log('  - Folder containing your iOS project: ' + iosFolder(context));
 
@@ -360,8 +360,7 @@ module.exports = function (context) {
     fs.writeFileSync(pbxProjectPath, pbxProject.writeSync());
     console.log('Added ShareExtension to XCode project');
 
-    deferral.resolve();
+    resolve();
+    });
   });
-
-  return deferral.promise;
 };

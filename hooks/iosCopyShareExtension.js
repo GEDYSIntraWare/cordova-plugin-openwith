@@ -116,19 +116,17 @@ function findXCodeproject(context, callback) {
 }
 
 module.exports = function(context) {
-  var Q = require('q');
-  var deferral = new Q.defer();
+  return new Promise(function(resolve, reject) {
+    findXCodeproject(context, function(projectFolder, projectName) {
 
-  findXCodeproject(context, function(projectFolder, projectName) {
+      var srcFolder = path.join(context.opts.projectRoot, 'plugins', PLUGIN_ID, 'src', 'ios', 'ShareExtension');
+      if (!fs.existsSync(srcFolder)) {
+        reject(redError('Missing extension project folder in ' + srcFolder + '.'));
+        return;
+      }
 
-    var srcFolder = path.join(context.opts.projectRoot, 'plugins', PLUGIN_ID, 'src', 'ios', 'ShareExtension');
-    if (!fs.existsSync(srcFolder)) {
-      throw redError('Missing extension project folder in ' + srcFolder + '.');
-    }
-
-    copyFolderRecursiveSync(srcFolder, path.join(context.opts.projectRoot, 'platforms', 'ios'));
-    deferral.resolve();
+      copyFolderRecursiveSync(srcFolder, path.join(context.opts.projectRoot, 'platforms', 'ios'));
+      resolve();
+    });
   });
-
-  return deferral.promise;
 };
