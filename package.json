@@ -47,11 +47,9 @@
   "# Dependencies required to run tests": "",
   "devDependencies": {
     "eslint": "^9.39.1",
-    "eslint-config-standard": "^17.1.0",
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-mocha": "^10.5.0",
     "eslint-plugin-promise": "^7.2.1",
-    "eslint-watch": "^8.0.0",
     "expect.js": "^0.3.1",
     "mocha": "^11.7.5"
   },
